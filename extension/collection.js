@@ -4,8 +4,6 @@ const shared = globalThis.MagnoGrabrShared;
 const ui = {
   list: document.querySelector("#links"),
   search: document.querySelector("#search"),
-  filter: document.querySelector("#category-filter"),
-  sort: document.querySelector("#sort"),
   summary: document.querySelector("#summary"),
   notice: document.querySelector("#notice"),
   empty: document.querySelector("#empty"),
@@ -19,6 +17,33 @@ let links = [];
 let settings = shared.DEFAULT_SETTINGS;
 let selected = new Set();
 let detailId = null;
+const filterPicker = MagnoGrabrPicker.createPicker(
+  document.querySelector("#category-filter"),
+  {
+    label: "Filter by category",
+    options: [["All categories", "All categories"], ...shared.CATEGORIES.map((category) => [category, category])],
+    value: "All categories",
+    onChange: render
+  }
+);
+const sortPicker = MagnoGrabrPicker.createPicker(
+  document.querySelector("#sort"),
+  {
+    label: "Sort collection",
+    options: [["newest", "Newest first"], ["oldest", "Oldest first"], ["name", "Name A–Z"]],
+    value: "newest",
+    onChange: render
+  }
+);
+const detailCategoryPicker = MagnoGrabrPicker.createPicker(
+  document.querySelector("#detail-category"),
+  {
+    label: "Category",
+    options: shared.CATEGORIES.map((category) => [category, category]),
+    value: shared.CATEGORIES[0],
+    onChange: updateDetailCategory
+  }
+);
 
 function notify(message) {
   ui.notice.textContent = message;
@@ -55,14 +80,14 @@ async function mutate(message) {
 
 function filteredLinks() {
   const query = ui.search.value.trim().toLowerCase();
-  const category = ui.filter.value;
+  const category = filterPicker.value;
   const items = links.filter((link) => {
     const matchesCategory = category === "All categories" || link.category === category;
     const searchable = [link.filename, link.normalizedUrl, link.text, link.sourceTitle, link.sourcePage].join(" ").toLowerCase();
     return matchesCategory && (!query || searchable.includes(query));
   });
-  if (ui.sort.value === "oldest") items.sort((a, b) => a.timestamp - b.timestamp);
-  else if (ui.sort.value === "name") items.sort((a, b) => (a.filename || a.text || a.normalizedUrl).localeCompare(b.filename || b.text || b.normalizedUrl));
+  if (sortPicker.value === "oldest") items.sort((a, b) => a.timestamp - b.timestamp);
+  else if (sortPicker.value === "name") items.sort((a, b) => (a.filename || a.text || a.normalizedUrl).localeCompare(b.filename || b.text || b.normalizedUrl));
   else items.sort((a, b) => b.timestamp - a.timestamp);
   return items;
 }
@@ -97,6 +122,7 @@ function render() {
   document.querySelector("#select-visible").textContent =
     visible.length && visible.every((link) => selected.has(link.id)) ? "Deselect shown" : "Select shown";
   document.querySelector("#dedupe").disabled = links.length < 2;
+  document.querySelector("#copy-all").disabled = links.length === 0;
   document.querySelector("#export-all").disabled = links.length === 0;
   document.querySelector("#clear").disabled = links.length === 0;
 }
@@ -126,11 +152,17 @@ function renderCard(link) {
       openDetails(link);
     }
   });
+  const actions = element("div", "link-card-actions");
+  const copy = element("button", "link-action-button", "Copy");
+  copy.type = "button";
+  copy.setAttribute("aria-label", `Copy ${link.filename || link.normalizedUrl}`);
+  copy.addEventListener("click", () => void copyLinks([link]));
   const remove = element("button", "icon-button", "×");
   remove.type = "button";
   remove.setAttribute("aria-label", "Remove link");
   remove.addEventListener("click", () => void removeOne(link.id));
-  row.append(checkbox, main, remove);
+  actions.append(copy, remove);
+  row.append(checkbox, main, actions);
   card.append(row);
   const metadata = element("div", "link-meta");
   metadata.append(element("span", "tag", link.category));
@@ -167,8 +199,7 @@ function openDetails(link) {
   ]) {
     if (value) fields.append(detailField(label, value));
   }
-  const category = document.querySelector("#detail-category");
-  category.value = link.category;
+  detailCategoryPicker.setValue(link.category);
   ui.dialog.showModal();
 }
 
@@ -179,12 +210,43 @@ async function removeOne(id) {
 }
 
 async function copyLinks(items) {
+  if (!items.length) {
+    notify("Nothing to copy");
+    return;
+  }
   try {
     await navigator.clipboard.writeText(items.map((link) => link.normalizedUrl).join("\n"));
-    notify(`Copied ${items.length}`);
+    notify(items.length === 1 ? "Copied" : `Copied ${items.length}`);
   } catch {
     notify("Copy failed");
   }
+}
+
+function confirmAction(message, title, confirmLabel) {
+  const dialog = document.querySelector("#confirmation");
+  document.querySelector("#confirmation-title").textContent = title;
+  document.querySelector("#confirmation-message").textContent = message;
+  const accept = document.querySelector("#confirmation-accept");
+  const cancel = document.querySelector("#confirmation-cancel");
+  accept.textContent = confirmLabel;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (confirmed) => {
+      if (settled) return;
+      settled = true;
+      cancel.removeEventListener("click", cancelAction);
+      accept.removeEventListener("click", acceptAction);
+      dialog.removeEventListener("cancel", cancelAction);
+      dialog.close();
+      resolve(confirmed);
+    };
+    const cancelAction = () => finish(false);
+    const acceptAction = () => finish(true);
+    cancel.addEventListener("click", cancelAction);
+    accept.addEventListener("click", acceptAction);
+    dialog.addEventListener("cancel", cancelAction);
+    dialog.showModal();
+  });
 }
 
 function downloadExport(items) {
@@ -206,14 +268,27 @@ function downloadExport(items) {
 
 async function deleteSelected() {
   const ids = [...selected];
-  if (!ids.length || !window.confirm(`Remove ${ids.length} selected link${ids.length === 1 ? "" : "s"}?`)) return;
+  if (!ids.length || !await confirmAction(
+    `Remove ${ids.length} selected link${ids.length === 1 ? "" : "s"}?`,
+    "Remove selected links",
+    "Remove"
+  )) return;
   await mutate({ type: "collection.remove", ids });
   notify(`Removed ${ids.length}`);
 }
 
-for (const category of ["All categories", ...shared.CATEGORIES]) {
-  ui.filter.append(new Option(category, category));
-  if (category !== "All categories") document.querySelector("#detail-category").append(new Option(category, category));
+async function updateDetailCategory(category) {
+  if (!detailId) return;
+  try {
+    await mutate({ type: "collection.category", ids: [detailId], category });
+    notify("Updated");
+    const link = links.find((item) => item.id === detailId);
+    if (link) openDetails(link);
+  } catch {
+    const link = links.find((item) => item.id === detailId);
+    if (link) detailCategoryPicker.setValue(link.category);
+    notify("Update failed");
+  }
 }
 
 ui.pageToolsEnabled.addEventListener("change", async () => {
@@ -233,8 +308,6 @@ ui.pageToolsEnabled.addEventListener("change", async () => {
 });
 
 ui.search.addEventListener("input", render);
-ui.filter.addEventListener("change", render);
-ui.sort.addEventListener("change", render);
 document.querySelector("#refresh").addEventListener("click", () => reload().catch(() => notify("Refresh failed")));
 document.querySelector("#settings").addEventListener("click", () => {
   location.assign(browser.runtime.getURL("options.html"));
@@ -248,6 +321,7 @@ document.querySelector("#select-visible").addEventListener("click", () => {
 document.querySelector("#copy-selected").addEventListener("click", () => copyLinks(links.filter((link) => selected.has(link.id))));
 document.querySelector("#export-selected").addEventListener("click", () => downloadExport(links.filter((link) => selected.has(link.id))));
 document.querySelector("#delete-selected").addEventListener("click", () => deleteSelected().catch(() => notify("Delete failed")));
+document.querySelector("#copy-all").addEventListener("click", () => copyLinks(links));
 document.querySelector("#dedupe").addEventListener("click", async () => {
   try {
     const before = links.length;
@@ -259,7 +333,11 @@ document.querySelector("#dedupe").addEventListener("click", async () => {
 });
 document.querySelector("#export-all").addEventListener("click", () => downloadExport(links));
 document.querySelector("#clear").addEventListener("click", async () => {
-  if (!links.length || !window.confirm(`Clear all ${links.length} saved links? This cannot be undone.`)) return;
+  if (!links.length || !await confirmAction(
+    `Clear all ${links.length} saved links? This cannot be undone.`,
+    "Clear collection",
+    "Clear"
+  )) return;
   try {
     await mutate({ type: "collection.clear" });
     selected.clear();
@@ -280,17 +358,6 @@ document.querySelector("#detail-remove").addEventListener("click", () => {
   if (detailId) void removeOne(detailId).catch(() => notify("Remove failed"));
 });
 document.querySelector("#detail-done").addEventListener("click", () => ui.dialog.close());
-document.querySelector("#detail-category").addEventListener("change", async (event) => {
-  if (!detailId) return;
-  try {
-    await mutate({ type: "collection.category", ids: [detailId], category: event.target.value });
-    notify("Updated");
-    const link = links.find((item) => item.id === detailId);
-    if (link) openDetails(link);
-  } catch {
-    notify("Update failed");
-  }
-});
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;

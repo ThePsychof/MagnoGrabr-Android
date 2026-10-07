@@ -26,12 +26,8 @@
         </header>
         <div class="collection-filters">
           <input id="search" type="search" placeholder="Search links, text, or source" aria-label="Search links">
-          <select id="category-filter" aria-label="Filter by category"></select>
-          <select id="sort" aria-label="Sort collection">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="name">Name A–Z</option>
-          </select>
+          <div id="category-filter"></div>
+          <div id="sort"></div>
         </div>
         <div class="selection-bar" id="selection-bar" hidden>
           <span id="selection-count"></span>
@@ -42,6 +38,7 @@
         <details class="collection-tools">
           <summary>Collection tools</summary>
           <div class="collection-tools-actions">
+            <button id="copy-all" disabled>Copy all links</button>
             <button id="dedupe">Remove duplicates</button>
             <button id="export-all">Export all links</button>
             <button id="clear" class="danger">Clear collection</button>
@@ -56,8 +53,8 @@
       <h2 id="detail-title"></h2>
       <div id="detail-fields"></div>
       <div class="setting-control">
-        <label for="detail-category">Category</label>
-        <select id="detail-category"></select>
+        <span>Category</span>
+        <div id="detail-category"></div>
       </div>
       <div class="dialog-actions">
         <button id="detail-copy">Copy</button>
@@ -66,6 +63,15 @@
         <button id="detail-done">Done</button>
       </div>
     </dialog>
+    <dialog class="dialog confirm-dialog" id="confirmation">
+      <h2 id="confirmation-title">Confirm action</h2>
+      <p id="confirmation-message"></p>
+      <div class="dialog-actions">
+        <button type="button" id="confirmation-cancel">Cancel</button>
+        <button type="button" class="danger" id="confirmation-accept">Continue</button>
+      </div>
+    </dialog>
+    <script src="picker.js"></script>
     <script src="shared.js"></script>
     <script src="collection.js"></script>
   </body>

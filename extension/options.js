@@ -2,6 +2,17 @@
 
 const notice = document.querySelector("#notice");
 const delay = document.querySelector("#delay");
+const themePicker = MagnoGrabrPicker.createPicker(document.querySelector("#theme"), {
+  label: "Accent color",
+  options: [["red", "Magno red"], ["pink", "Pink"], ["blue", "Blue"]],
+  value: "red",
+  onChange: (theme) => { document.body.dataset.accent = theme; }
+});
+const exportPicker = MagnoGrabrPicker.createPicker(document.querySelector("#export-format"), {
+  label: "Default export format",
+  options: [["txt", "Plain text (.txt)"], ["csv", "CSV (.csv)"], ["json", "JSON (.json)"]],
+  value: "txt"
+});
 delay.addEventListener("input", () => { document.querySelector("#delay-value").value = `${delay.value} ms`; });
 
 browser.runtime.sendMessage({ type: "collection.get" }).then(({ settings }) => {
@@ -9,19 +20,19 @@ browser.runtime.sendMessage({ type: "collection.get" }).then(({ settings }) => {
   document.body.dataset.accent = settings.theme;
   document.querySelector("#dedupe").checked = settings.dedupe;
   document.querySelector("#dark-mode").checked = settings.darkMode;
-  document.querySelector("#theme").value = settings.theme;
+  themePicker.setValue(settings.theme);
   delay.value = settings.grabDelayMs;
   document.querySelector("#delay-value").value = `${settings.grabDelayMs} ms`;
-  document.querySelector("#export-format").value = settings.defaultExport;
+  exportPicker.setValue(settings.defaultExport);
 }).catch(() => { notice.textContent = "Load failed"; });
 
 document.querySelector("#save").addEventListener("click", async () => {
   const settings = {
     dedupe: document.querySelector("#dedupe").checked,
     darkMode: document.querySelector("#dark-mode").checked,
-    theme: document.querySelector("#theme").value,
+    theme: themePicker.value,
     grabDelayMs: Number(delay.value),
-    defaultExport: document.querySelector("#export-format").value
+    defaultExport: exportPicker.value
   };
   try {
     const saved = await browser.runtime.sendMessage({ type: "settings.save", settings });
