@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>MagnoGrabr Collection</title>
+    <link rel="stylesheet" href="ui.css">
+  </head>
+  <body class="extension-popup">
+    <main class="app-shell">
+      <header class="page-header">
+        <div><h1>MagnoGrabr</h1><p id="summary">Your saved links</p></div>
+        <div class="header-actions">
+          <button class="icon-button" id="settings" aria-label="Open settings">⚙</button>
+          <button class="icon-button" id="refresh" aria-label="Refresh collection">↻</button>
+        </div>
+      </header>
+      <section class="quick-actions" aria-label="Quick actions">
+        <button class="button accent" id="grab-action">🧲</button>
+        <button class="button" 	id="draw-action">✏️</button>
+        <button class="button" id="smart-action">✨</button>
+        <button class="button" id="extract-action">⚡</button>
+      </section>
+      <p class="notice-bar" id="action-notice" role="status" aria-live="polite">Choose an action to use it on the current page.</p>
+      <header class="page-header collection-header"><h2>Collection</h2></header>
+      <div class="filters">
+        <input id="search" type="search" placeholder="Search links, text, or source" aria-label="Search links">
+        <select id="category-filter" aria-label="Filter by category"></select>
+        <select id="sort" aria-label="Sort collection">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="name">Name A–Z</option>
+        </select>
+      </div>
+      <div class="bulkbar">
+        <button id="select-visible">Select visible</button>
+        <button id="copy-selected" disabled>Copy</button>
+        <button id="export-selected" disabled>Export</button>
+        <button id="delete-selected" class="danger" disabled>Delete</button>
+      </div>
+      <p class="notice-bar" id="notice" role="status" aria-live="polite"></p>
+      <section class="link-list" id="links" aria-label="Captured links"></section>
+      <div class="empty" id="empty" hidden><strong>Your collection is ready</strong>Open the MagnoGrabr extension menu while browsing to grab, draw, smart-grab, or extract links.</div>
+      <footer class="bulkbar">
+        <button id="dedupe">Remove duplicates</button>
+        <button id="export-all">Export all</button>
+        <button id="clear" class="danger">Clear collection</button>
+      </footer>
+    </main>
+    <dialog class="dialog" id="details">
+      <h2 id="detail-title"></h2>
+      <div id="detail-fields"></div>
+      <div class="setting-control">
+        <label for="detail-category">Category</label>
+        <select id="detail-category"></select>
+      </div>
+      <div class="dialog-actions">
+        <button id="detail-copy">Copy</button>
+        <button id="detail-open">Open link</button>
+        <button id="detail-remove" class="danger">Remove</button>
+        <button id="detail-done">Done</button>
+      </div>
+    </dialog>
+    <script src="shared.js"></script>
+    <script src="smart-grab.js"></script>
+    <script src="popup-actions.js"></script>
+    <script src="collection.js"></script>
+  </body>
+</html>

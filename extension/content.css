@@ -1,0 +1,77 @@
+:host {
+  all: initial;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 13px;
+  padding: 10px 12px;
+  background: #303030;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:focus-visible { outline: 3px solid #ff716b; outline-offset: 2px; }
+button.primary { background: #f72e2c; color: #fff; }
+
+.confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: #0008;
+  pointer-events: auto;
+}
+
+.confirm.open { display: flex; }
+.card { width: min(420px, 100%); max-height: 80vh; overflow: auto; border-radius: 20px; padding: 18px; background: #1c1c1c; color: #fff; box-shadow: 0 12px 42px #0009; }
+.card h2 { margin: 0 0 8px; font-size: 19px; }
+.card p, .candidate { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.candidate { padding: 7px 0; border-bottom: 1px solid #444; }
+.confirm-actions { display: flex; gap: 9px; margin-top: 14px; }
+.confirm-actions button { flex: 1; }
+.toast { position: fixed; right: 14px; bottom: 18px; display: none; max-width: min(360px, calc(100vw - 28px)); border: 1px solid #555; border-radius: 12px; padding: 12px 16px; background: #171717; color: #fff; font-size: 13px; box-shadow: 0 8px 32px #0007; pointer-events: auto; }
+.toast.open { display: block; }
+
+[hidden] { display: none !important; }
+.fab { position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom) + 96px); width: 54px; height: 54px; min-height: 0; padding: 0; border-radius: 50%; background: #f72e2c; border: 2px solid #ffffff38; font-size: 24px; line-height: 1; opacity: .92; box-shadow: 0 10px 26px -6px #f72e2c, 0 4px 14px #0006; pointer-events: auto; touch-action: none; }
+.scrim { position: fixed; inset: 0; background: #0006; opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility .2s; }
+.scrim.open { opacity: 1; visibility: visible; pointer-events: auto; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; width: min(480px, 100%); padding: 10px 16px max(18px, env(safe-area-inset-bottom)); border: 1px solid #ffffff1f; border-bottom: 0; border-radius: 26px 26px 0 0; background: #1c1c1c; color: #fff; box-shadow: 0 -12px 42px #0009; translate: 0 105%; visibility: hidden; transition: translate .28s cubic-bezier(.2, .8, .2, 1), visibility .28s; }
+.sheet.open { translate: 0 0; visibility: visible; pointer-events: auto; }
+.sheet-handle { width: 40px; height: 4px; margin: 0 auto 12px; border-radius: 4px; background: #ffffff40; }
+.sheet h2 { margin: 0 0 12px; font-size: 18px; }
+.sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.sheet-grid button { min-height: 58px; font-size: 15px; }
+.pill { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); translate: -50% 0; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); padding: 6px 6px 6px 16px; border: 1px solid #ffffff2e; border-radius: 999px; background: #171717; color: #fff; font-size: 13px; box-shadow: 0 8px 32px #0007; pointer-events: auto; }
+.pill button { min-height: 40px; padding: 6px 14px; border-radius: 999px; background: #f72e2c; white-space: nowrap; }
+
+opacity: 0;
+.card { border: 1px solid #ffffff1f; }
+.toast { right: auto; left: 50%; width: max-content; translate: -50% 0; bottom: max(24px, env(safe-area-inset-bottom)); text-align: center; }
+@media (max-width: 520px) {
+  .confirm { align-items: flex-end; padding: 0; }
+  .card { width: 100%; max-height: 85vh; border-radius: 24px 24px 0 0; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise { from { opacity: 0; translate: 0 22px; } }
+  @keyframes pop { from { opacity: 0; translate: -50% 14px; } }
+  .confirm.open .card { animation: rise .28s cubic-bezier(.2, .8, .2, 1); }
+  .toast.open { animation: pop .22s ease-out; }
+  button { transition: transform .12s ease, background .12s ease; }
+  button:active { transform: scale(.97); }
+}

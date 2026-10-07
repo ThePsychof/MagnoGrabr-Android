@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "MagnoGrabr",
+  "version": "0.2.0",
+  "description": "Collect, organize, and export useful links from webpages.",
+  "icons": {
+    "48": "icons/magnograbr-48.png",
+    "96": "icons/magnograbr-96.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "shared.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "MagnoGrabr",
+    "default_popup": "collection.html",
+    "default_icon": {
+      "48": "icons/magnograbr-48.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "shared.js",
+        "smart-grab.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "magnograbr-android@thepsychof.dev",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      },
+      "strict_min_version": "142.0"
+    }
+  }
+}

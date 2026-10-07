@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>MagnoGrabr Settings</title>
+    <link rel="stylesheet" href="ui.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="page-header">
+        <div><h1>Settings</h1><p>Stored privately in this Firefox profile.</p></div>
+        <button id="collection">Collection</button>
+      </header>
+      <section class="settings-list">
+        <label class="setting-card"><span><strong>Enable page tools</strong><small>Show the floating launcher and capture tools on webpages.</small></span><input id="enabled" type="checkbox"></label>
+        <label class="setting-card"><span><strong>Skip duplicate links</strong><small>Compare normalized URLs and ignore fragments.</small></span><input id="dedupe" type="checkbox"></label>
+        <label class="setting-card"><span><strong>Dark appearance</strong><small>Use the dark extension interface.</small></span><input id="dark-mode" type="checkbox"></label>
+        <div class="setting-card setting-control"><label for="theme">Accent color</label><select id="theme"><option value="red">Magno red</option><option value="pink">Pink</option><option value="blue">Blue</option></select></div>
+        <div class="setting-card setting-control"><label for="delay">Capture delay (milliseconds)</label><input id="delay" type="range" min="0" max="1000" step="100"><output id="delay-value">0 ms</output><small>Spaces out larger link captures.</small></div>
+        <div class="setting-card setting-control"><label for="export-format">Default export format</label><select id="export-format"><option value="txt">Plain text (.txt)</option><option value="csv">CSV (.csv)</option><option value="json">JSON (.json)</option></select></div>
+      </section>
+      <p class="notice-bar" id="notice" role="status" aria-live="polite"></p>
+      <button class="button accent wide" id="save">Save settings</button>
+      <p class="footer-note">Page reading is limited to the active webpage for the capture tools. Link collections and preferences stay in browser.storage.local.</p>
+    </main>
+    <script src="shared.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
