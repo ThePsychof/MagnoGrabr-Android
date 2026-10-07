@@ -10,8 +10,13 @@ const smartSource = readFileSync(new URL("../extension/smart-grab.js", import.me
 const smartContext = {};
 runInNewContext(smartSource, smartContext);
 
-function createBackgroundHarness() {
+function createBackgroundHarness(fetchImpl = async () => ({
+  ok: false,
+  headers: { get() { return null; } }
+})) {
   const storage = { links: [], settings: { ...shared.DEFAULT_SETTINGS } };
+  const openedTabs = [];
+  const updatedTabs = [];
   let onMessage;
   const browser = {
     storage: {
@@ -25,16 +30,22 @@ function createBackgroundHarness() {
       onInstalled: { addListener() {} },
       getURL(path) { return `moz-extension://unit-test/${path}`; }
     },
-    tabs: { async create() {} }
+    tabs: {
+      async create(options) { openedTabs.push(options.url); },
+      async update(tabId, options) { updatedTabs.push({ tabId, ...options }); }
+    }
   };
   runInNewContext(backgroundSource, {
     browser,
     globalThis: { MagnoGrabrShared: shared },
     crypto: globalThis.crypto,
+    fetch: fetchImpl,
+    AbortController,
     setTimeout,
+    clearTimeout,
     Promise
   });
-  return { storage, send: (message) => onMessage(message) };
+  return { storage, openedTabs, updatedTabs, send: (message, sender) => onMessage(message, sender) };
 }
 
 test("normalization removes URL fragments but retains query parameters", () => {
@@ -164,6 +175,31 @@ test("concurrent capture methods share serialized storage and deduplicate fragme
   assert.ok(["Grab Mode", "Extract Page"].includes(harness.storage.links[0].captureMethod));
 });
 
+test("captured links receive asynchronous size and filename previews", async () => {
+  const requests = [];
+  const harness = createBackgroundHarness(async (url, options) => {
+    requests.push({ url, method: options.method });
+    return {
+      ok: true,
+      headers: {
+        get(name) {
+          if (name === "content-length") return "4096";
+          if (name === "content-disposition") return 'attachment; filename="guide.pdf"';
+          if (name === "content-type") return "application/pdf";
+          return null;
+        }
+      }
+    };
+  });
+  await harness.send({ type: "capture", method: "Grab Mode", items: [{ url: "https://example.org/download" }] });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(requests, [{ url: "https://example.org/download", method: "HEAD" }]);
+  assert.equal(harness.storage.links[0].sizeBytes, 4096);
+  assert.equal(harness.storage.links[0].sizeStatus, "available");
+  assert.equal(harness.storage.links[0].filename, "guide.pdf");
+  assert.equal(harness.storage.links[0].mime, "application/pdf");
+});
+
 test("collection management mutations update the same persistent links", async () => {
   const harness = createBackgroundHarness();
   await harness.send({ type: "capture", method: "Draw Mode", items: [{ url: "https://example.org/item" }] });
@@ -173,4 +209,43 @@ test("collection management mutations update the same persistent links", async (
   const removed = await harness.send({ type: "collection.remove", ids: [id] });
   assert.equal(removed.links.length, 0);
   assert.equal(harness.storage.links.length, 0);
+});
+
+test("collection.clear removes every saved link", async () => {
+  const harness = createBackgroundHarness();
+  await harness.send({
+    type: "capture",
+    method: "Grab Mode",
+    items: [{ url: "https://example.org/one" }, { url: "https://example.org/two" }]
+  });
+  const result = await harness.send({ type: "collection.clear" });
+  assert.equal(result.removed, 2);
+  assert.equal(result.links.length, 0);
+  assert.equal(harness.storage.links.length, 0);
+});
+
+test("collection.open navigates the current page tab to the extension collection", async () => {
+  const harness = createBackgroundHarness();
+  const result = await harness.send({ type: "collection.open" }, { tab: { id: 42 } });
+  assert.equal(result.opened, true);
+  assert.deepEqual(harness.updatedTabs, [{ tabId: 42, url: "moz-extension://unit-test/collection.html" }]);
+  assert.deepEqual(harness.openedTabs, []);
+});
+
+test("collection.open creates a tab when there is no originating page tab", async () => {
+  const harness = createBackgroundHarness();
+  const result = await harness.send({ type: "collection.open" });
+  assert.equal(result.opened, true);
+  assert.deepEqual(harness.openedTabs, ["moz-extension://unit-test/collection.html"]);
+});
+
+test("page-tools toggle persists while other settings saves preserve it", async () => {
+  const harness = createBackgroundHarness();
+  const disabled = await harness.send({ type: "page-tools.set-enabled", enabled: false });
+  assert.equal(disabled.enabled, false);
+  const updated = await harness.send({ type: "settings.save", settings: { theme: "blue" } });
+  assert.equal(updated.enabled, false);
+  assert.equal(updated.theme, "blue");
+  const enabled = await harness.send({ type: "page-tools.set-enabled", enabled: true });
+  assert.equal(enabled.enabled, true);
 });

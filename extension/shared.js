@@ -89,6 +89,7 @@
       type,
       mime,
       sizeBytes: Number.isFinite(data.sizeBytes) && data.sizeBytes >= 0 ? data.sizeBytes : null,
+      sizeStatus: data.sizeStatus === "checking" ? "checking" : Number.isFinite(data.sizeBytes) && data.sizeBytes >= 0 ? "available" : "unavailable",
       filename,
       sourcePage: textOrNull(data.sourcePage),
       sourceTitle: textOrNull(data.sourceTitle),

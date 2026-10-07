@@ -10,7 +10,10 @@ const ui = {
   notice: document.querySelector("#notice"),
   empty: document.querySelector("#empty"),
   dialog: document.querySelector("#details"),
-  selectedCount: document.querySelector("#copy-selected")
+  selectionBar: document.querySelector("#selection-bar"),
+  selectionCount: document.querySelector("#selection-count"),
+  pageToolsEnabled: document.querySelector("#page-tools-enabled"),
+  pageToolsStatus: document.querySelector("#page-tools-status")
 };
 let links = [];
 let settings = shared.DEFAULT_SETTINGS;
@@ -19,15 +22,27 @@ let detailId = null;
 
 function notify(message) {
   ui.notice.textContent = message;
+  ui.notice.hidden = false;
 }
 
 async function reload() {
   const state = await browser.runtime.sendMessage({ type: "collection.get" });
   links = state.links;
+  const existingIds = new Set(links.map((link) => link.id));
+  for (const id of [...selected]) if (!existingIds.has(id)) selected.delete(id);
   settings = state.settings;
   document.body.dataset.theme = settings.darkMode ? "dark" : "light";
   document.body.dataset.accent = settings.theme;
+  ui.pageToolsEnabled.checked = settings.enabled;
+  ui.pageToolsStatus.textContent = settings.enabled ? "Enabled on webpages" : "Off — enable here to show page controls";
   render();
+  const legacyLinks = links.filter((link) => link.sizeBytes == null && !link.sizeStatus);
+  if (legacyLinks.length) {
+    void browser.runtime.sendMessage({
+      type: "metadata.refresh",
+      ids: legacyLinks.map((link) => link.id)
+    }).catch(() => notify("Size check failed"));
+  }
 }
 
 async function mutate(message) {
@@ -61,7 +76,7 @@ function element(tag, className, text) {
 
 function render() {
   const visible = filteredLinks();
-  ui.summary.textContent = `${links.length} saved link${links.length === 1 ? "" : "s"} · ${visible.length} shown`;
+  ui.summary.textContent = `${links.length} saved link${links.length === 1 ? "" : "s"}`;
   ui.list.replaceChildren();
   ui.empty.hidden = links.length !== 0;
   ui.list.hidden = links.length === 0;
@@ -70,6 +85,9 @@ function render() {
   }
   for (const link of visible) ui.list.append(renderCard(link));
   const count = selected.size;
+  ui.selectionBar.hidden = count === 0;
+  ui.selectionCount.textContent = `${count} selected`;
+  document.querySelector("#select-visible").disabled = visible.length === 0;
   document.querySelector("#copy-selected").disabled = count === 0;
   document.querySelector("#copy-selected").textContent = count ? `Copy (${count})` : "Copy";
   document.querySelector("#export-selected").disabled = count === 0;
@@ -77,7 +95,10 @@ function render() {
   document.querySelector("#delete-selected").disabled = count === 0;
   document.querySelector("#delete-selected").textContent = count ? `Delete (${count})` : "Delete";
   document.querySelector("#select-visible").textContent =
-    visible.length && visible.every((link) => selected.has(link.id)) ? "Deselect visible" : "Select visible";
+    visible.length && visible.every((link) => selected.has(link.id)) ? "Deselect shown" : "Select shown";
+  document.querySelector("#dedupe").disabled = links.length < 2;
+  document.querySelector("#export-all").disabled = links.length === 0;
+  document.querySelector("#clear").disabled = links.length === 0;
 }
 
 function renderCard(link) {
@@ -115,6 +136,7 @@ function renderCard(link) {
   metadata.append(element("span", "tag", link.category));
   metadata.append(element("span", "", link.captureMethod || "Captured"));
   if (link.sizeBytes != null) metadata.append(element("span", "", shared.formatBytes(link.sizeBytes)));
+  else metadata.append(element("span", "size-preview", link.sizeStatus === "checking" ? "Checking size…" : "Size unavailable"));
   card.append(metadata);
   return card;
 }
@@ -135,7 +157,7 @@ function openDetails(link) {
     ["Link text", link.text],
     ["Category", link.category],
     ["Filename", link.filename],
-    ["Size", link.sizeBytes == null ? null : shared.formatBytes(link.sizeBytes)],
+    ["Size", link.sizeBytes == null ? (link.sizeStatus === "checking" ? "Checking…" : "Unavailable") : shared.formatBytes(link.sizeBytes)],
     ["MIME type", link.mime],
     ["Type", link.type],
     ["Source page", link.sourceTitle],
@@ -153,21 +175,21 @@ function openDetails(link) {
 async function removeOne(id) {
   await mutate({ type: "collection.remove", ids: [id] });
   if (detailId === id) ui.dialog.close();
-  notify("Link removed.");
+  notify("Removed");
 }
 
 async function copyLinks(items) {
   try {
     await navigator.clipboard.writeText(items.map((link) => link.normalizedUrl).join("\n"));
-    notify(`Copied ${items.length} link${items.length === 1 ? "" : "s"}.`);
-  } catch (error) {
-    notify(`Copy failed: ${error.message || error}`);
+    notify(`Copied ${items.length}`);
+  } catch {
+    notify("Copy failed");
   }
 }
 
 function downloadExport(items) {
   if (!items.length) {
-    notify("There are no links to export.");
+    notify("Nothing to export");
     return;
   }
   const format = settings.defaultExport;
@@ -179,14 +201,14 @@ function downloadExport(items) {
   link.download = `MagnoGrabr_Links.${format}`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
-  notify(`Exported ${items.length} link${items.length === 1 ? "" : "s"} as ${format.toUpperCase()}.`);
+  notify(`Exported ${items.length} · ${format.toUpperCase()}`);
 }
 
 async function deleteSelected() {
   const ids = [...selected];
   if (!ids.length || !window.confirm(`Remove ${ids.length} selected link${ids.length === 1 ? "" : "s"}?`)) return;
   await mutate({ type: "collection.remove", ids });
-  notify(`Removed ${ids.length} selected link${ids.length === 1 ? "" : "s"}.`);
+  notify(`Removed ${ids.length}`);
 }
 
 for (const category of ["All categories", ...shared.CATEGORIES]) {
@@ -194,13 +216,28 @@ for (const category of ["All categories", ...shared.CATEGORIES]) {
   if (category !== "All categories") document.querySelector("#detail-category").append(new Option(category, category));
 }
 
+ui.pageToolsEnabled.addEventListener("change", async () => {
+  const enabled = ui.pageToolsEnabled.checked;
+  ui.pageToolsEnabled.disabled = true;
+  try {
+    const saved = await browser.runtime.sendMessage({ type: "page-tools.set-enabled", enabled });
+    ui.pageToolsEnabled.checked = saved.enabled;
+    ui.pageToolsStatus.textContent = saved.enabled ? "Enabled on webpages" : "Off — enable here to show page controls";
+    notify(saved.enabled ? "Tools on" : "Tools off");
+  } catch (error) {
+    ui.pageToolsEnabled.checked = !enabled;
+    notify("Toggle failed");
+  } finally {
+    ui.pageToolsEnabled.disabled = false;
+  }
+});
+
 ui.search.addEventListener("input", render);
 ui.filter.addEventListener("change", render);
 ui.sort.addEventListener("change", render);
-document.querySelector("#refresh").addEventListener("click", () => reload().catch((error) => notify(`Could not load collection: ${error.message || error}`)));
+document.querySelector("#refresh").addEventListener("click", () => reload().catch(() => notify("Refresh failed")));
 document.querySelector("#settings").addEventListener("click", () => {
-  browser.tabs.create({ url: browser.runtime.getURL("options.html") })
-    .catch((error) => notify(`Could not open settings: ${error.message || error}`));
+  location.assign(browser.runtime.getURL("options.html"));
 });
 document.querySelector("#select-visible").addEventListener("click", () => {
   const visible = filteredLinks();
@@ -210,14 +247,14 @@ document.querySelector("#select-visible").addEventListener("click", () => {
 });
 document.querySelector("#copy-selected").addEventListener("click", () => copyLinks(links.filter((link) => selected.has(link.id))));
 document.querySelector("#export-selected").addEventListener("click", () => downloadExport(links.filter((link) => selected.has(link.id))));
-document.querySelector("#delete-selected").addEventListener("click", () => deleteSelected().catch((error) => notify(`Delete failed: ${error.message || error}`)));
+document.querySelector("#delete-selected").addEventListener("click", () => deleteSelected().catch(() => notify("Delete failed")));
 document.querySelector("#dedupe").addEventListener("click", async () => {
   try {
     const before = links.length;
     await mutate({ type: "collection.dedupe" });
-    notify(`Removed ${before - links.length} duplicate link${before - links.length === 1 ? "" : "s"}.`);
-  } catch (error) {
-    notify(`Deduplication failed: ${error.message || error}`);
+    notify(`Removed ${before - links.length} dupes`);
+  } catch {
+    notify("Dedupe failed");
   }
 });
 document.querySelector("#export-all").addEventListener("click", () => downloadExport(links));
@@ -226,9 +263,9 @@ document.querySelector("#clear").addEventListener("click", async () => {
   try {
     await mutate({ type: "collection.clear" });
     selected.clear();
-    notify("Collection cleared.");
-  } catch (error) {
-    notify(`Could not clear collection: ${error.message || error}`);
+    notify("Cleared");
+  } catch {
+    notify("Clear failed");
   }
 });
 document.querySelector("#detail-copy").addEventListener("click", () => {
@@ -237,29 +274,29 @@ document.querySelector("#detail-copy").addEventListener("click", () => {
 });
 document.querySelector("#detail-open").addEventListener("click", () => {
   const link = links.find((item) => item.id === detailId);
-  if (link) void browser.tabs.create({ url: link.url }).catch((error) => notify(`Could not open link: ${error.message || error}`));
+  if (link) void browser.tabs.create({ url: link.url }).catch(() => notify("Open failed"));
 });
 document.querySelector("#detail-remove").addEventListener("click", () => {
-  if (detailId) void removeOne(detailId).catch((error) => notify(`Remove failed: ${error.message || error}`));
+  if (detailId) void removeOne(detailId).catch(() => notify("Remove failed"));
 });
 document.querySelector("#detail-done").addEventListener("click", () => ui.dialog.close());
 document.querySelector("#detail-category").addEventListener("change", async (event) => {
   if (!detailId) return;
   try {
     await mutate({ type: "collection.category", ids: [detailId], category: event.target.value });
-    notify("Category updated.");
+    notify("Updated");
     const link = links.find((item) => item.id === detailId);
     if (link) openDetails(link);
-  } catch (error) {
-    notify(`Could not update category: ${error.message || error}`);
+  } catch {
+    notify("Update failed");
   }
 });
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   if (changes.links || changes.settings) {
-    reload().catch((error) => notify(`Could not refresh collection: ${error.message || error}`));
+    reload().catch(() => notify("Refresh failed"));
   }
 });
 
-reload().catch((error) => notify(`Could not load collection: ${error.message || error}`));
+reload().catch(() => notify("Load failed"));

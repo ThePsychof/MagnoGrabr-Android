@@ -10,6 +10,15 @@
   let reviewRoot = null;
   let smartCandidates = [];
   let selectionOverlay = null;
+  let statusTimer = null;
+  let launcherRemovalTimer = null;
+  let savedCountTapCount = 0;
+  let lastSavedCountTapAt = 0;
+  let clearingCollection = false;
+  let grabCount = 0;
+  let savedLinkCount = 0;
+  let themeAccent = "red";
+  let darkMode = true;
 
   function payloadFor(anchor) {
     const rawUrl = anchor.href || anchor.getAttribute("href") || "";
@@ -26,7 +35,10 @@
   }
 
   async function capture(items, method) {
-    if (!items.length) return { added: 0, duplicates: 0 };
+    if (!items.length) {
+      if (method === "Draw Mode") showMessage("No links");
+      return { added: 0, duplicates: 0 };
+    }
     let added = 0;
     let duplicates = 0;
     try {
@@ -39,9 +51,20 @@
         added += result.added;
         duplicates += result.duplicates;
       }
+      if (method === "Grab Mode") {
+        grabCount += added;
+        if (added > 0) showGrabSuccess();
+        else if (duplicates > 0) showStatus("Already saved", "notice", 1200);
+      } else if (added > 0 && ["Draw Mode", "Smart Grab"].includes(method)) {
+        showMessage(`Saved ${added}`, "success");
+      } else if (["Draw Mode", "Smart Grab"].includes(method) && duplicates > 0) {
+        showMessage(`${duplicates} duplicate${duplicates === 1 ? "" : "s"}`);
+      } else if (["Draw Mode", "Smart Grab"].includes(method)) {
+        showMessage("No new links");
+      }
       return { added, duplicates };
     } catch (error) {
-      showMessage(`Capture failed after adding ${added}: ${error.message || error}`);
+      showMessage("Save failed");
       throw error;
     }
   }
@@ -145,18 +168,12 @@
       : `${smartCandidates.length - 1} similar links found. Review before adding.`;
     const list = reviewRoot.querySelector(".review-candidates");
     list.replaceChildren();
-    smartCandidates.slice(0, 6).forEach((item) => {
+    smartCandidates.forEach((item) => {
       const row = document.createElement("div");
       row.className = "candidate";
       row.textContent = item.text ? `${item.text} — ${item.url}` : item.url;
       list.append(row);
     });
-    if (smartCandidates.length > 6) {
-      const more = document.createElement("div");
-      more.className = "candidate";
-      more.textContent = `and ${smartCandidates.length - 6} more`;
-      list.append(more);
-    }
     reviewRoot.querySelector(".confirm").classList.add("open");
   }
 
@@ -164,6 +181,8 @@
     if (reviewHost) return;
     reviewHost = document.createElement("div");
     reviewHost.id = "magnograbr-review-host";
+    reviewHost.dataset.theme = darkMode ? "dark" : "light";
+    reviewHost.dataset.accent = themeAccent;
     reviewHost.style.cssText = "all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;";
     reviewRoot = reviewHost.attachShadow({ mode: "closed" });
     const stylesheet = document.createElement("link");
@@ -183,7 +202,7 @@
           </div>
         </div>
       </div>
-      <div class="toast" role="status" aria-live="polite"></div>`;
+      `;
     reviewRoot.append(panel);
     reviewRoot.addEventListener("click", (event) => {
       const button = event.target.closest("button");
@@ -202,16 +221,8 @@
     document.documentElement.append(reviewHost);
   }
 
-  function showMessage(message) {
-    ensureReviewUi();
-    const toast = reviewRoot.querySelector(".toast");
-    toast.textContent = message;
-    toast.classList.add("open");
-    setTimeout(() => {
-      if (!reviewRoot) return;
-      toast.classList.remove("open");
-      if (!reviewRoot.querySelector(".confirm.open")) removeReviewUi();
-    }, 4000);
+  function showMessage(message, state = "notice") {
+    showStatus(message, state, mode === "off" ? 4000 : 2500);
   }
 
   function removeReviewUi() {
@@ -225,10 +236,7 @@
     selectionOverlay = null;
   }
 
-  function endDraw() { queueMicrotask(syncLauncher);
-    mode = "off";
-    removeSelectionOverlay();
-  }
+  function endDraw() { setMode("off"); }
 
   function beginSelection() {
     removeSelectionOverlay();
@@ -292,21 +300,63 @@
     return a.right >= b.left && a.left <= b.right && a.bottom >= b.top && a.top <= b.bottom;
   }
 
-  function setMode(next) { queueMicrotask(syncLauncher);
+  function setMode(next) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+    if (next === "grab" && mode !== "grab") grabCount = 0;
     mode = next;
     if (mode !== "draw") removeSelectionOverlay();
     if (mode === "draw") beginSelection();
     if (mode !== "smart") {
       reviewRoot?.querySelector(".confirm").classList.remove("open");
       smartCandidates = [];
-      if (reviewRoot?.querySelector(".toast.open")) return;
       removeReviewUi();
     }
+    if (mode === "off") {
+      const status = launcherRoot?.querySelector(".capture-status");
+      if (status) status.hidden = true;
+    }
+    syncLauncher();
+  }
+
+  function updateSavedCount(links) {
+    if (Array.isArray(links)) savedLinkCount = links.length;
+    const counter = launcherRoot?.querySelector(".saved-count");
+    if (!counter) return;
+    counter.textContent = String(savedLinkCount);
+    counter.setAttribute("aria-label", `${savedLinkCount} links saved. Tap three times quickly to clear collection`);
+  }
+
+  function handleSavedCountTap() {
+    const now = Date.now();
+    savedCountTapCount = now - lastSavedCountTapAt <= 700 ? savedCountTapCount + 1 : 1;
+    lastSavedCountTapAt = now;
+    if (savedCountTapCount < 3) return;
+    savedCountTapCount = 0;
+    lastSavedCountTapAt = 0;
+    if (clearingCollection) return;
+    if (!savedLinkCount) {
+      showMessage("Already empty");
+      return;
+    }
+    clearingCollection = true;
+    void browser.runtime.sendMessage({ type: "collection.clear" })
+      .then(({ removed }) => showMessage(`Cleared ${removed}`, "success"))
+      .catch(() => showMessage("Clear failed"))
+      .finally(() => { clearingCollection = false; });
+  }
+
+  function stopLabel() {
+    if (mode === "draw") return "Stop drawing";
+    if (mode === "smart") return "Exit Smart Grab";
+    return "Stop grabbing";
   }
 
   function handlePageClick(event) {
+    const path = event.composedPath();
+    if (launcherRoot?.querySelector(".action-dock.open") && !path.includes(launcherHost)) toggleDock(false);
     if (mode === "off" || event.defaultPrevented) return;
-    const anchor = event.composedPath().find((node) => node instanceof HTMLAnchorElement || node instanceof HTMLAreaElement);
+    const anchor = path.find((node) => node instanceof HTMLAnchorElement || node instanceof HTMLAreaElement);
     if (!anchor) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -315,48 +365,162 @@
       return;
     }
     if (mode === "grab") {
-      mode = "off";
-      queueMicrotask(syncLauncher); void capture([payloadFor(anchor)], "Grab Mode").catch(() => {});
+      showStatus("Saving…", "pending", 0);
+      void capture([payloadFor(anchor)], "Grab Mode").catch(() => {});
     }
   }
 
   let launcherHost = null;
   let launcherRoot = null;
 
-  const HINTS = {
-    grab: "Tap a link to grab it",
-    draw: "Drag a box around links",
-    smart: "Tap one link to find similar"
+  const MODE_DETAILS = {
+    grab: { icon: "🧲", title: "Tap links to save" },
+    draw: { icon: "✏️", title: "Draw around links" },
+    smart: { icon: "✨", title: "Tap a link to find similar" }
   };
 
-  function toggleSheet(force) {
-    const open = typeof force === "boolean" ? force : !launcherRoot.querySelector(".sheet").classList.contains("open");
-    launcherRoot.querySelector(".sheet").classList.toggle("open", open);
-    launcherRoot.querySelector(".scrim").classList.toggle("open", open);
+  function showGrabSuccess() {
+    showStatus("Saved · tap more", "success", 1200);
+  }
+
+  function showStatus(message, state, duration) {
+    if (!enabled) return;
+    ensureLauncher();
+    const status = launcherRoot?.querySelector(".capture-status");
+    if (!status) return;
+    clearTimeout(statusTimer);
+    statusTimer = null;
+    const indicator = status.querySelector(".status-indicator");
+    indicator.textContent = state === "success" ? "✅" : state === "pending" ? "⏳" : state === "notice" ? "⚠️" : "🧲";
+    status.querySelector(".status-message").textContent = message;
+    status.dataset.state = state;
+    status.querySelector(".status-stop").setAttribute("aria-label", stopLabel());
+    const fabCount = launcherRoot.querySelector(".fab-count");
+    fabCount.hidden = mode !== "grab";
+    fabCount.textContent = String(grabCount);
+    status.hidden = false;
+    if (!duration) return;
+    statusTimer = setTimeout(() => {
+      statusTimer = null;
+      if (!launcherRoot) return;
+      if (mode === "off") {
+        status.hidden = true;
+        return;
+      }
+      syncLauncher();
+    }, duration);
+  }
+
+  function toggleDock(force) {
+    const dock = launcherRoot.querySelector(".action-dock");
+    const open = typeof force === "boolean" ? force : !dock.classList.contains("open");
+    dock.classList.toggle("open", open);
+    const fab = launcherRoot.querySelector(".fab");
+    fab.setAttribute("aria-expanded", String(open));
+    fab.setAttribute("aria-label", open
+      ? "Close MagnoGrabr actions"
+      : mode === "off" ? "Open MagnoGrabr actions" : `${MODE_DETAILS[mode].title} Open actions`);
   }
 
   function syncLauncher() {
     if (!enabled) return;
     ensureLauncher();
     if (!launcherRoot) return;
+    launcherRoot.querySelector(".page-tools-switch").setAttribute("aria-checked", "true");
     const active = mode !== "off";
-    launcherRoot.querySelector(".fab").hidden = active;
-    launcherRoot.querySelector(".pill").hidden = !active;
-    launcherRoot.querySelector(".pill span").textContent = HINTS[mode] || "";
-    if (active) toggleSheet(false);
+    const status = launcherRoot.querySelector(".capture-status");
+    const stop = status.querySelector(".status-stop");
+    const close = status.querySelector(".status-close");
+    const fabCount = launcherRoot.querySelector(".fab-count");
+    status.classList.toggle("active", active);
+    stop.setAttribute("aria-label", stopLabel());
+    stop.hidden = !active;
+    close.hidden = active;
+    fabCount.hidden = mode !== "grab";
+    fabCount.textContent = String(grabCount);
+    launcherRoot.querySelector(".fab-icon").textContent = active ? MODE_DETAILS[mode].icon : "🧲";
+    launcherRoot.querySelectorAll(".dock-action[data-act='grab'], .dock-action[data-act='draw'], .dock-action[data-act='smart']")
+      .forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.act === mode)));
+    if (active) {
+      const details = MODE_DETAILS[mode];
+      status.hidden = false;
+      status.dataset.state = "active";
+      status.querySelector(".status-indicator").textContent = details.icon;
+      status.querySelector(".status-message").textContent = details.title;
+    } else if (status.dataset.state === "active") {
+      status.hidden = true;
+    }
+    if (active) toggleDock(false);
   }
 
   async function runExtract() {
     try {
       const result = await capture(linkElements().map(payloadFor), "Extract Page");
-      showMessage(`Added ${result.added}, skipped ${result.duplicates} duplicates`);
+      if (result.added === 0 && result.duplicates === 0) {
+        showMessage("No links found");
+      } else {
+        showMessage(`+${result.added} · ${result.duplicates} dupes`, result.added ? "success" : "notice");
+      }
     } catch (error) { /* capture already showed the error */ }
+  }
+
+  async function copyAllLinks() {
+    try {
+      const { links } = await browser.runtime.sendMessage({ type: "collection.get" });
+      const urls = links.map((link) => link.normalizedUrl || link.url).filter(Boolean);
+      if (!urls.length) {
+        showMessage("Nothing to copy");
+        return;
+      }
+      const text = urls.join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (clipboardError) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+        let copied = false;
+        try {
+          document.body.append(textarea);
+          textarea.select();
+          copied = document.execCommand("copy");
+        } finally {
+          textarea.remove();
+        }
+        if (!copied) throw clipboardError;
+      }
+      showMessage(`Copied ${urls.length}`, "success");
+    } catch (error) {
+      showMessage("Copy failed");
+    }
+  }
+
+  async function openCollection() {
+    try {
+      await browser.runtime.sendMessage({ type: "collection.open" });
+    } catch (error) {
+      showMessage("Open failed");
+    }
+  }
+
+  async function setPageToolsEnabled(nextEnabled) {
+    const toggle = launcherRoot?.querySelector(".page-tools-switch");
+    if (toggle) toggle.setAttribute("aria-checked", String(nextEnabled));
+    try {
+      const result = await browser.runtime.sendMessage({ type: "page-tools.set-enabled", enabled: nextEnabled });
+      updateEnabled(result.enabled);
+    } catch (error) {
+      if (toggle) toggle.setAttribute("aria-checked", String(enabled));
+      showMessage("Toggle failed");
+    }
   }
 
   function ensureLauncher() {
     if (launcherHost || !document.body) return;
     launcherHost = document.createElement("div");
     launcherHost.id = "magnograbr-launcher-host";
+    launcherHost.dataset.theme = darkMode ? "dark" : "light";
+    launcherHost.dataset.accent = themeAccent;
     launcherHost.style.cssText = "all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;";
     launcherRoot = launcherHost.attachShadow({ mode: "closed" });
     const stylesheet = document.createElement("link");
@@ -365,86 +529,129 @@
     launcherRoot.append(stylesheet);
     const panel = document.createElement("div");
     panel.innerHTML = `
-      <div class="scrim"></div>
-      <div class="sheet" role="dialog" aria-label="MagnoGrabr actions">
-        <div class="sheet-handle"></div>
-        <h2>MagnoGrabr</h2>
-        <div class="sheet-grid">
-          <button class="primary" data-act="grab">🧲 Grab</button>
-          <button data-act="draw">✏️ Draw</button>
-          <button data-act="smart">✨ Smart Grab</button>
-          <button data-act="extract">🔗 Extract page</button>
+      <div class="action-dock">
+        <div class="dock-heading">
+          <button class="page-tools-switch" type="button" role="switch" aria-label="Page tools" aria-checked="true" data-act="page-tools-toggle">
+            <span class="switch-thumb" aria-hidden="true"></span>
+          </button>
+          <button class="saved-count" type="button" data-act="clear-collection" title="Tap 3 times quickly to clear collection" aria-label="0 links saved. Tap three times quickly to clear collection">0</button>
+        </div>
+        <div class="dock-group dock-capture" role="group" aria-label="Link capture actions">
+          <button class="dock-action featured" data-act="grab" title="Tap links to save" aria-label="Grab links" aria-pressed="false">🧲</button>
+          <button class="dock-action" data-act="draw" title="Draw around links to save" aria-label="Draw selection" aria-pressed="false">✏️</button>
+          <button class="dock-action" data-act="smart" title="Find similar links" aria-label="Find similar links" aria-pressed="false">✨</button>
+          <button class="dock-action" data-act="extract" title="Save links from this page" aria-label="Get page links">🔗</button>
+        </div>
+        <div class="dock-divider" aria-hidden="true"></div>
+        <div class="dock-group dock-library" role="group" aria-label="Collection actions">
+          <button class="dock-action" data-act="copy-all" title="Copy all saved links" aria-label="Copy all saved links">📋</button>
+          <button class="dock-action" data-act="collection" title="Open collection" aria-label="Open collection">🗂️</button>
         </div>
       </div>
-      <button class="fab" aria-label="Open MagnoGrabr">🧲</button>
-      <div class="pill" hidden><span></span><button data-act="cancel">✕ Cancel</button></div>`;
+      <div class="launcher-controls">
+        <button class="fab" aria-label="Open MagnoGrabr actions" aria-expanded="false"><span class="fab-icon" aria-hidden="true">🧲</span><span class="fab-count" aria-hidden="true" hidden>0</span></button>
+      </div>
+      <div class="capture-status" role="status" aria-live="polite" hidden>
+        <span class="status-indicator" aria-hidden="true"></span>
+        <span class="status-message"></span>
+        <button class="status-stop" data-act="cancel" aria-label="Stop grabbing">✖️</button>
+        <button class="status-close" data-act="dismiss" aria-label="Dismiss notification" hidden>✖️</button>
+      </div>`;
     launcherRoot.append(panel);
+    updateSavedCount();
 
     launcherRoot.addEventListener("click", (event) => {
-      if (event.target.classList.contains("scrim")) return toggleSheet(false);
       const button = event.target.closest("[data-act]");
       if (!button) return;
       const act = button.dataset.act;
-      toggleSheet(false);
+      if (act !== "page-tools-toggle" && act !== "clear-collection") toggleDock(false);
       if (act === "cancel") setMode("off");
+      else if (act === "dismiss") {
+        clearTimeout(statusTimer);
+        statusTimer = null;
+        launcherRoot.querySelector(".capture-status").hidden = true;
+      }
+      else if (act === "copy-all") void copyAllLinks();
+      else if (act === "collection") void openCollection();
+      else if (act === "page-tools-toggle") void setPageToolsEnabled(!enabled);
+      else if (act === "clear-collection") handleSavedCountTap();
       else if (act === "extract") void runExtract();
       else setMode(act);
     });
 
-    const fab = launcherRoot.querySelector(".fab");
-    let drag = null;
-    fab.addEventListener("pointerdown", (event) => {
-      drag = { y: event.clientY, top: fab.getBoundingClientRect().top, moved: false };
-      fab.setPointerCapture(event.pointerId);
-    });
-    fab.addEventListener("pointermove", (event) => {
-      if (!drag) return;
-      const dy = event.clientY - drag.y;
-      if (Math.abs(dy) > 6) drag.moved = true;
-      if (!drag.moved) return;
-      fab.style.bottom = "auto";
-      fab.style.top = `${Math.min(Math.max(8, drag.top + dy), window.innerHeight - 70)}px`;
-    });
-    fab.addEventListener("pointerup", () => {
-      if (drag && !drag.moved) toggleSheet();
-      drag = null;
-    });
-    fab.addEventListener("pointercancel", () => { drag = null; });
-
+    launcherRoot.querySelector(".fab").addEventListener("click", () => toggleDock());
     document.documentElement.append(launcherHost);
   }
 
   function handleKeydown(event) {
-    if (event.key === "Escape" && mode !== "off") setMode("off");
+    if (event.key !== "Escape") return;
+    if (mode !== "off") setMode("off");
+    else if (launcherRoot?.querySelector(".action-dock.open")) toggleDock(false);
   }
 
   function updateEnabled(value) {
-    if (enabled === value) return;
+    if (enabled === value) {
+      const toggle = launcherRoot?.querySelector(".page-tools-switch");
+      if (toggle) toggle.setAttribute("aria-checked", String(value));
+      return;
+    }
     enabled = value;
     if (enabled) {
+      clearTimeout(launcherRemovalTimer);
+      launcherRemovalTimer = null;
+      launcherHost?.classList.remove("turning-off");
       syncLauncher();
       document.addEventListener("click", handlePageClick, true);
       document.addEventListener("keydown", handleKeydown, true);
       return;
     }
     mode = "off";
+    clearTimeout(statusTimer);
+    statusTimer = null;
     document.removeEventListener("click", handlePageClick, true);
     document.removeEventListener("keydown", handleKeydown, true);
     removeSelectionOverlay();
     removeReviewUi();
-    launcherHost?.remove();
-    launcherHost = null;
-    launcherRoot = null;
+    const toggle = launcherRoot?.querySelector(".page-tools-switch");
+    if (toggle) toggle.setAttribute("aria-checked", "false");
+    launcherHost?.classList.add("turning-off");
+    clearTimeout(launcherRemovalTimer);
+    launcherRemovalTimer = setTimeout(() => {
+      if (enabled) return;
+      launcherHost?.remove();
+      launcherHost = null;
+      launcherRoot = null;
+      launcherRemovalTimer = null;
+    }, 180);
     smartCandidates = [];
   }
 
+  function updateTheme(settings) {
+    themeAccent = ["red", "pink", "blue"].includes(settings?.theme) ? settings.theme : "red";
+    darkMode = settings?.darkMode !== false;
+    if (launcherHost) {
+      launcherHost.dataset.theme = darkMode ? "dark" : "light";
+      launcherHost.dataset.accent = themeAccent;
+    }
+    if (reviewHost) {
+      reviewHost.dataset.theme = darkMode ? "dark" : "light";
+      reviewHost.dataset.accent = themeAccent;
+    }
+  }
+
   browser.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local" || !changes.settings) return;
-    updateEnabled(changes.settings.newValue?.enabled !== false);
+    if (areaName !== "local") return;
+    if (changes.links) updateSavedCount(changes.links.newValue);
+    if (changes.settings) {
+      updateTheme(changes.settings.newValue);
+      updateEnabled(changes.settings.newValue?.enabled !== false);
+    }
   });
 
-  const settingsReady = browser.storage.local.get("settings").then(({ settings }) => {
+  const settingsReady = browser.storage.local.get(["settings", "links"]).then(({ settings, links }) => {
+    updateTheme(settings);
     updateEnabled(settings?.enabled !== false);
+    updateSavedCount(links);
   }).catch((error) => {
     console.error("MagnoGrabr could not load page tool settings.", error);
   });
