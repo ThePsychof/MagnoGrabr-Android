@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MagnoGrabr for Android – Collect links in Firefox on your phone</title>
+<meta name="description" content="MagnoGrabr for Android is a lightweight link collector for Firefox. Tap, draw or smart-grab links, then sort, dedupe and export to TXT, CSV or JSON. No account, no tracking.">
+<link rel="icon" href="MagnoGrabr.png">
+<meta name="theme-color" content="#181818">
+<meta property="og:type" content="website">
+<meta property="og:title" content="MagnoGrabr for Android – Your browser. Your links. Zero tab chaos.">
+<meta property="og:description" content="A lightweight link collector for Firefox on Android. Grab, draw, smart grab or extract a page, then export to TXT, CSV or JSON.">
+<meta property="og:image" content="https://thepsychof.github.io/MagnoGrabr/MagnoGrabr.png">
+<meta name="twitter:card" content="summary">
+<style>
+/* tokens from src/utils/theme.ts (red) */
+:root{
+  --brand:#D60003; --action:#F72E2C; --action-hover:#C6211F;
+  --root:#272727; --card:#404040; --deep:#181818; --btn-off:#1F1F1F; --btn-off-hover:#2B2B2B;
+  --text:#E6E6E6; --muted:#999999; --line:#333333;
+  --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{margin:0;background:var(--deep);color:var(--text);font:17px/1.65 var(--sans);-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+a{color:inherit}
+img{max-width:100%}
+:focus-visible{outline:3px solid var(--action);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+h1,h2,h3{font-family:var(--mono);letter-spacing:-.03em;margin:0}
+p{margin:0}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:8px;background:var(--action);color:#fff;font-weight:700;text-decoration:none;border:1px solid transparent;transition:background .2s}
+.btn:hover{background:var(--action-hover)}
+.btn.ghost{background:transparent;color:var(--text);border-color:#555}
+.btn.ghost:hover{background:var(--btn-off-hover);border-color:#777}
+.btn.sm{padding:8px 16px;font-size:15px}
+/* browser logo + hover name */
+.logos{display:inline-flex;align-items:center;gap:10px;vertical-align:middle}
+.bl{position:relative;display:inline-grid;place-items:center;width:28px;height:28px;flex:none;font-style:normal;cursor:default}
+.bl img{display:block;width:100%;height:100%;object-fit:contain;transition:transform .15s}
+.bl:hover img{transform:scale(1.15)}
+.bl::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 9px);left:50%;transform:translate(-50%,4px);background:#000;color:#fff;font:12px var(--mono);padding:4px 9px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:30}
+.bl::before{content:"";position:absolute;bottom:calc(100% + 3px);left:50%;transform:translate(-50%,4px);border:6px solid transparent;border-top-color:#000;border-bottom:0;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:30}
+.bl:hover::after,.bl:hover::before{opacity:1;transform:translate(-50%,0)}
+.btn .logos{gap:6px}
+.btn .bl,summary .bl{width:22px;height:22px}
+.logos.sm{gap:0;vertical-align:-.25em}
+.logos.sm .bl{width:1.2em;height:1.2em}
+.logos.sm .bl::after,.logos.sm .bl::before{display:none}
+header .bl::after{bottom:auto;top:calc(100% + 9px);transform:translate(-50%,-4px)}
+header .bl::before{bottom:auto;top:calc(100% + 3px);border:6px solid transparent;border-bottom-color:#000;border-top:0;transform:translate(-50%,-4px)}
+header .bl:hover::after,header .bl:hover::before{transform:translate(-50%,0)}
+/* header */
+header{position:sticky;top:0;z-index:10;background:rgba(24,24,24,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;height:68px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:700 1.2rem var(--mono);letter-spacing:-.02em}
+.brand img{width:30px;height:30px}
+.brand small{font:600 .75rem var(--mono);color:var(--action);border:1px solid var(--action);border-radius:999px;padding:1px 9px;letter-spacing:0}
+nav{display:flex;align-items:center;gap:28px;font-size:15px}
+nav a:not(.btn){text-decoration:none;color:var(--muted)}
+nav a:not(.btn):hover{color:var(--text)}
+
+/* hero */
+.hero{padding:88px 0 72px;background:radial-gradient(70% 60% at 85% 0%,rgba(247,46,44,.16),transparent 70%)}
+.hero .wrap{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+.hero .wrap > *{min-width:0}
+.hero h1{font-size:clamp(2.4rem,5.4vw,4rem);line-height:1.04;margin-bottom:22px}
+.hero .lead{font-size:1.15rem;color:#c9c9c9;max-width:46ch;margin-bottom:32px}
+.cta{display:flex;flex-wrap:wrap;gap:12px}
+.note{margin-top:18px;font-size:14px;color:var(--muted)}
+.shot{margin:0 auto;max-width:300px;border:1px solid #3a3a3a;border-radius:28px;background:var(--root);box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden}
+.shot img{display:block;width:100%;height:auto;max-width:100%}
+.shot .ph{display:none;padding:96px 28px;text-align:center;color:var(--muted);font:14px var(--mono)}
+.shot.empty .ph{display:block}
+
+/* trust strip */
+.trust{border-block:1px solid var(--line);background:var(--root)}
+.trust ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr)}
+.trust li{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:30px 20px;border-left:1px solid var(--line)}
+.trust li:first-child{border-left:0}
+.trust svg{flex:none;width:26px;height:26px;stroke:var(--action);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.trust b{display:block;font:600 1rem var(--mono);letter-spacing:-.02em;color:var(--text)}
+.trust span{display:block;margin-top:2px;font-size:14px;line-height:1.45;color:var(--muted)}
+
+section{padding:96px 0}
+.head{max-width:640px;margin-bottom:52px}
+.head h2{font-size:clamp(1.9rem,4vw,2.8rem);line-height:1.1;margin-bottom:14px}
+.head p{color:#bdbdbd;font-size:1.08rem}
+
+/* tools grid */
+.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tools div{background:var(--root);padding:28px 24px}
+.tools .em{display:block;font-size:1.8rem;line-height:1;margin-bottom:14px}
+.tools h3{font-size:1.2rem;margin-bottom:6px}
+.tools p{font-size:15px;color:#bdbdbd}
+.tools-note{margin-top:22px;color:var(--muted);font-size:15px}
+
+/* steps */
+.steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,1fr);gap:40px;counter-reset:s}
+.steps li{counter-increment:s;border-top:2px solid var(--action);padding-top:22px}
+.steps li::before{content:"Step " counter(s);display:block;font:600 14px var(--mono);color:var(--action);margin-bottom:10px}
+.steps h3{font-size:1.3rem;margin-bottom:8px}
+.steps p{color:#bdbdbd}
+
+/* feature rows */
+.alt{background:var(--root)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;padding:56px 0;border-top:1px solid var(--line)}
+.head + .row{border-top:0;padding-top:0}
+.row h3{font-size:1.75rem;line-height:1.15;margin-bottom:14px}
+.row p{color:#bdbdbd;margin-bottom:14px}
+.row ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.row li{padding-left:26px;position:relative;color:#d6d6d6}
+.row li::before{content:"";position:absolute;left:2px;top:.62em;width:12px;height:2px;background:var(--action)}
+.panel{background:var(--deep);border:1px solid var(--line);border-radius:14px;padding:28px}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chips span{background:var(--btn-off);border:1px solid #4a4a4a;border-radius:999px;padding:6px 16px;font-size:16px}
+.panel .cap{margin-top:16px;font-size:14px;color:var(--muted)}
+.fmt{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.fmt div{background:var(--btn-off);border:1px solid #4a4a4a;border-radius:10px;padding:18px 10px;text-align:center;font:700 1.3rem var(--mono)}
+.fmt small{display:block;font:13px var(--sans);color:var(--muted);font-weight:400;margin-top:2px}
+.keys{display:grid;gap:12px}
+.keys div{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--btn-off);border:1px solid #4a4a4a;border-radius:10px;padding:12px 16px;font-size:15px}
+.keys span{color:var(--muted);text-align:right}
+
+/* small feature grid */
+.mini{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:64px}
+.mini div{background:var(--root);padding:26px}
+.mini h4{margin:0 0 6px;font:600 1.02rem var(--mono);letter-spacing:-.02em}
+.mini p{font-size:15px;color:#bdbdbd}
+
+/* comparison */
+.cmp{width:100%;border-collapse:collapse;font-size:16px}
+.cmp th,.cmp td{text-align:left;padding:18px 20px;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp thead th{font:700 1rem var(--mono);color:var(--muted);border-bottom:2px solid #444}
+.cmp thead th:last-child{color:var(--action)}
+.cmp td:first-child{font-weight:600;width:22%}
+.cmp td:nth-child(2){color:var(--muted);width:34%}
+.cmp td:last-child{color:var(--text)}
+.scroll{overflow-x:auto}
+
+/* privacy */
+.priv{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start}
+.priv h2{font-size:clamp(1.9rem,4vw,2.8rem);line-height:1.1;margin-bottom:16px}
+.priv p{color:#bdbdbd;margin-bottom:14px}
+.perm{display:grid;gap:12px}
+.perm div{background:var(--deep);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.perm b{display:block;font:600 1rem var(--mono);margin-bottom:4px}
+.perm p{font-size:15px;margin:0}
+
+/* faq */
+.faq{max-width:780px}
+details{border-bottom:1px solid var(--line)}
+summary{cursor:pointer;list-style:none;padding:22px 40px 22px 0;font:600 1.1rem var(--mono);letter-spacing:-.02em;position:relative}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";position:absolute;right:6px;top:18px;font-size:1.6rem;color:var(--action);transition:transform .2s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{padding:0 40px 24px 0;color:#bdbdbd}
+
+/* family */
+.family{display:flex;flex-wrap:wrap;gap:24px 48px;align-items:center;justify-content:space-between;background:var(--root);border:1px solid var(--line);border-radius:14px;padding:36px 40px}
+.family h2{font-size:1.6rem;margin-bottom:8px}
+.family h2 a{color:var(--action);text-decoration:none}
+.family h2 a:hover{color:var(--action-hover)}
+.family p{color:#bdbdbd;max-width:56ch}
+
+/* final cta */
+.final{text-align:center;background:radial-gradient(60% 100% at 50% 100%,rgba(247,46,44,.18),transparent 70%),var(--root);border-top:1px solid var(--line)}
+.final h2{font-size:clamp(2rem,4.6vw,3.2rem);line-height:1.08;margin:0 auto 16px;max-width:20ch}
+.final p{color:#bdbdbd;margin:0 auto 32px;max-width:50ch}
+.final .cta{justify-content:center}
+
+footer{padding:36px 0 44px;font-size:14px;color:var(--muted)}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between}
+footer a{text-decoration:none;margin-right:20px;color:#c9c9c9}
+footer a:hover{color:var(--action)}
+footer a.author{margin-right:0}
+@media(max-width:900px){
+  .hero .wrap,.row,.priv{grid-template-columns:1fr;gap:36px}
+  .steps{grid-template-columns:1fr;gap:28px}
+  .tools{grid-template-columns:1fr 1fr}
+  .mini{grid-template-columns:1fr 1fr}
+  nav a:not(.btn){display:none}
+  section{padding:72px 0}.hero{padding:56px 0}
+  .trust ul{grid-template-columns:1fr 1fr}
+  .trust li{border-left:0;border-top:1px solid var(--line)}
+  .trust li:nth-child(-n+2){border-top:0}
+  .family{padding:28px 24px}
+}
+@media(max-width:520px){.mini,.tools{grid-template-columns:1fr}}
+@media(max-width:520px){.trust ul{grid-template-columns:1fr}.trust li:nth-child(2){border-top:1px solid var(--line)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <a class="brand" href="#"><img src="MagnoGrabr.png" alt="">MagnoGrabr <small>Android</small></a>
+  <nav>
+    <a href="#tools">Tools</a><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a>
+    <a class="btn sm" href="https://addons.mozilla.org/en-US/firefox/addon/magnograbrandroid/">Add to <span class="logos" data-b="firefox"></span></a>
+  </nav>
+</div></header>
+
+<main>
+<div class="hero"><div class="wrap">
+  <div>
+    <h1>Your browser. Your links. Zero tab chaos.</h1>
+    <p class="lead">MagnoGrabr for Android is a lightweight link collector for <span class="logos sm" data-b="firefox"></span>. Tap or sweep over the links you want, then sort the results, remove duplicates and export the list.</p>
+    <div class="cta">
+      <a class="btn" href="https://addons.mozilla.org/en-US/firefox/addon/magnograbrandroid/">Add to <span class="logos" data-b="firefox"></span> for Android</a>
+    </div>
+    <p class="note">Free and open source · Made for <span class="logos sm" data-b="firefox"></span> on Android</p>
+  </div>
+  <figure class="shot" id="shot">
+    <!-- Put a real screenshot of the Android panel at screenshots/android.png -->
+    <img src="screenshots/android.png" alt="The MagnoGrabr panel on Firefox for Android showing grabbed links sorted into categories"
+         onerror="this.remove();document.getElementById('shot').classList.add('empty')">
+    <div class="ph">Add your Android screenshot at<br>screenshots/android.png</div>
+  </figure>
+</div></div>
+
+<div class="trust"><div class="wrap">
+  <ul>
+    <li>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+      <div><b>Built for Android</b><span>Runs in <span class="logos sm" data-b="firefox"></span> on your phone</span></div>
+    </li>
+    <li>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>
+      <div><b>No account</b><span>No ads, no sign-up, no analytics</span></div>
+    </li>
+    <li>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>
+      <div><b>Open source</b><span>Code on GitHub</span></div>
+    </li>
+    <li>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+      <div><b>Stays in your profile</b><span>Your collection never goes to a separate service</span></div>
+    </li>
+  </ul>
+</div></div>
+
+<section id="tools"><div class="wrap">
+  <div class="head">
+    <h2>Catch the good links</h2>
+    <p>Save useful links without breaking your browsing flow. Open the on-page MagnoGrabr panel and pick your move.</p>
+  </div>
+  <div class="tools">
+    <div><span class="em" aria-hidden="true">🧲</span><h3>Grab</h3><p>Tap links to save them as you browse.</p></div>
+    <div><span class="em" aria-hidden="true">✏️</span><h3>Draw</h3><p>Sweep over a group of links to capture them together.</p></div>
+    <div><span class="em" aria-hidden="true">✨</span><h3>Smart Grab</h3><p>Find similar links, review the matches, then save.</p></div>
+    <div><span class="em" aria-hidden="true">🔗</span><h3>Extract page</h3><p>Collect links from the current page in one go.</p></div>
+  </div>
+  <p class="tools-note">The panel stays tucked away until you need it. Page tools can be switched off any time.</p>
+</div></section>
+
+<section id="how" class="alt"><div class="wrap">
+  <div class="head">
+    <h2>From browsing to a clean list in three steps</h2>
+    <p>You stay on the page you're already reading. MagnoGrabr does the collecting.</p>
+  </div>
+  <ol class="steps">
+    <li><h3>Open the panel</h3><p>Open the on-page MagnoGrabr panel and choose a tool: Grab, Draw, Smart Grab or Extract page.</p></li>
+    <li><h3>Catch the links</h3><p>Tap the links you want, sweep over a group, or let Smart Grab find similar ones and review the matches before saving.</p></li>
+    <li><h3>Use your list</h3><p>Search, filter and select your links, then copy, export or clear them and start over.</p></li>
+  </ol>
+</div></section>
+
+<section id="features"><div class="wrap">
+  <div class="head">
+    <h2>Everything you need to turn a page of links into a usable list</h2>
+  </div>
+
+  <div class="row">
+    <div>
+      <h3>Capture without the tab chaos</h3>
+      <p>Four tools for four situations, all one tap away in the on-page panel. Hide the page tools whenever you don't need them.</p>
+      <ul>
+        <li>Tap to grab single links</li>
+        <li>Draw across a group to capture it together</li>
+        <li>Smart Grab finds similar links for you to review</li>
+        <li>Optional capture delay</li>
+      </ul>
+    </div>
+    <div class="panel keys" aria-hidden="true">
+      <div>Tap links one by one <span>Grab</span></div>
+      <div>Sweep over a group <span>Draw</span></div>
+      <div>Review similar matches <span>Smart Grab</span></div>
+      <div>Every link on the page <span>Extract page</span></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <div class="chips" aria-hidden="true"><span>🖼️ Media</span><span>📁 Files</span><span>🌐 Links</span><span>📀 Software</span><span>🥷 Suspicious</span></div>
+      <p class="cap">Browse your collection by category, newest, oldest or name.</p>
+    </div>
+    <div>
+      <h3>Your links, sorted</h3>
+      <p>Find what you saved fast, and see what a link is before you open it.</p>
+      <ul>
+        <li>Search URLs, link text, filenames and source pages</li>
+        <li>Filter by category; sort by newest, oldest or name</li>
+        <li>Select links for bulk copy, export or removal</li>
+        <li>View details and recategorize links</li>
+        <li>Remove duplicates or clear out the collection</li>
+        <li>Preview file size and filename when the server provides them</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <h3>Take it with you</h3>
+      <p>Export your list in the format the next tool expects, or just copy what you need.</p>
+      <ul>
+        <li>Copy one link, selected links, or everything</li>
+        <li>Export as plain text, CSV or JSON</li>
+        <li>Set your default export format</li>
+      </ul>
+    </div>
+    <div class="fmt panel" aria-hidden="true">
+      <div>TXT<small>Plain list</small></div><div>CSV<small>Spreadsheets</small></div><div>JSON<small>Scripts and tools</small></div>
+    </div>
+  </div>
+
+  <div class="mini">
+    <div><h4>Dark or light</h4><p>Pick the appearance that suits your phone.</p></div>
+    <div><h4>Accent colors</h4><p>Red, pink or blue, your call.</p></div>
+    <div><h4>Default export</h4><p>Choose TXT, CSV or JSON once and forget it.</p></div>
+    <div><h4>Capture delay</h4><p>Optionally slow capture down to avoid stray grabs.</p></div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="head">
+    <h2>Why not just long-press every link?</h2>
+    <p>You can. It gets slow once there are more than a handful.</p>
+  </div>
+  <div class="scroll">
+  <table class="cmp">
+    <thead><tr><th></th><th>By hand</th><th>With MagnoGrabr</th></tr></thead>
+    <tbody>
+      <tr><td>Getting a link</td><td>Long-press, choose Copy link, switch apps, paste, repeat</td><td>Tap it</td></tr>
+      <tr><td>Groups of links</td><td>One at a time</td><td>Sweep over them with Draw</td></tr>
+      <tr><td>Whole pages</td><td>Not really possible</td><td>One tap on Extract page</td></tr>
+      <tr><td>Duplicates</td><td>Spot them yourself</td><td>Remove them in one go</td></tr>
+      <tr><td>File details</td><td>Open each link to find out</td><td>Filename and size shown when the server provides them</td></tr>
+      <tr><td>Output</td><td>Paste into a note</td><td>Export to TXT, CSV or JSON</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div></section>
+
+<section id="privacy"><div class="wrap priv">
+  <div>
+    <h2>Private by design</h2>
+    <p>Your collection and preferences stay in your <span class="logos sm" data-b="firefox"></span> profile. No account needed.</p>
+    <p>For size and filename previews, MagnoGrabr may send a lightweight <code>HEAD</code> request directly to a captured link's server. Your collection is not sent to a separate service.</p>
+    <a class="btn ghost" href="https://github.com/ThePsychof/MagnoGrabr-Android">Read the source</a>
+  </div>
+  <div class="perm">
+    <div><b>Access to websites</b><p>Powers the capture tools on the pages you visit.</p></div>
+    <div><b>Network requests</b><p>Only a lightweight HEAD request to a captured link's own server, for size and filename previews.</p></div>
+    <div><b>Accounts</b><p>None.</p></div>
+    <div><b>Your collection</b><p>Stays in your <span class="logos sm" data-b="firefox"></span> profile.</p></div>
+  </div>
+</div></section>
+
+<section id="faq" class="alt"><div class="wrap">
+  <div class="head"><h2>Questions</h2></div>
+  <div class="faq">
+    <details><summary>Does it work in <span class="logos" data-b="firefox"></span> for Android?</summary>
+      <p>Yes, that's what it's built for. Install it from <span class="logos sm" data-b="firefox"></span> Add-ons on your phone and open the on-page panel from any page.</p></details>
+    <details><summary>Why does it need access to websites?</summary>
+      <p>The capture tools run on the page you're viewing, so they need page access to see and save its links.</p></details>
+    <details><summary>Where are my links stored?</summary>
+      <p>In your <span class="logos sm" data-b="firefox"></span> profile on your device. You can remove selected links or clear out the whole collection from the list.</p></details>
+    <details><summary>Why don't some links show a size or filename?</summary>
+      <p>Those previews come from the link's own server, and not every server provides them.</p></details>
+    <details><summary>Can I hide the on-page tools?</summary>
+      <p>Yes. The panel stays tucked away until you need it, and page tools can be switched off any time.</p></details>
+    <details><summary>Is there a desktop version?</summary>
+      <p>Yes. The <a href="https://thepsychof.github.io/MagnoGrabr/">desktop version</a> collects links as you hover over them.</p></details>
+    <details><summary>Is it free?</summary>
+      <p>Yes. MagnoGrabr is free and open source.</p></details>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="family">
+    <div>
+      <h2>Part of the <a href="https://addons.mozilla.org/en-US/firefox/collections/19588200/MagnoGrabr/">MagnoGrabr family</a></h2>
+      <p>This is the Android-focused version of MagnoGrabr. Same link-catching spirit, shaped for browsing on the go.</p>
+    </div>
+    <a class="btn ghost" href="https://thepsychof.github.io/MagnoGrabr/">See the desktop version ↗</a>
+  </div>
+</div></section>
+
+<section class="final"><div class="wrap">
+  <h2>Stop juggling tabs for links</h2>
+  <p>Install MagnoGrabr for Android and collect your next list of links in seconds.</p>
+  <div class="cta">
+    <a class="btn" href="https://addons.mozilla.org/en-US/firefox/addon/magnograbrandroid/">Add to <span class="logos" data-b="firefox"></span> for Android</a>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <span>MagnoGrabr for Android by <a class="author" href="https://github.com/ThePsychof">Psychof</a> · Firefox is a trademark of the Mozilla Foundation. MagnoGrabr is not affiliated with Mozilla.</span>
+  <span>
+    <a href="https://github.com/ThePsychof/MagnoGrabr-Android">Source</a>
+    <a href="https://github.com/ThePsychof/MagnoGrabr-Android/issues">Report an issue</a>
+    <a href="https://thepsychof.github.io/MagnoGrabr/">Desktop version</a>
+    <a href="https://addons.mozilla.org/en-US/firefox/addon/magnograbrandroid/">Add-ons</a>
+  </span>
+</div></footer>
+<script>
+/* ---------- Firefox logo ---------- */
+const LOGO_BASE = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
+document.querySelectorAll('.logos[data-b]').forEach(el => {
+  el.textContent = '';
+  const item = document.createElement('i');
+  item.className = 'bl';
+  item.dataset.tip = 'Firefox';
+  const img = new Image();
+  img.src = LOGO_BASE + 'Firefox_logo,_2019.svg';
+  img.alt = 'Firefox';
+  img.onerror = () => item.replaceWith(document.createTextNode('Firefox'));
+  item.append(img);
+  el.append(item);
+});
+</script>
+</body>
+</html>
