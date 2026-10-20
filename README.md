@@ -6,7 +6,7 @@
 
 **A lightweight link collector for Firefox on Android.**
 
-[Desktop version ↗](https://github.com/ThePsychof/MagnoGrabr)
+[Firefox add-ons](https://addons.mozilla.org/en-US/firefox/addon/magnograbrandroid/)
 
 </div>
 
